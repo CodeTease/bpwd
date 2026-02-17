@@ -16,12 +16,6 @@ brew install CodeTease/tap/bpwd
 cargo install bpwd
 ```
 
-### NPM
-
-```bash
-npm install -g bpwd
-```
-
 ### Installer Script
 
 In Linux:
