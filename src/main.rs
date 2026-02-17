@@ -1,24 +1,18 @@
 use std::env;
-use std::fmt;
 use std::fs;
 use std::path::{PathBuf};
 use std::process;
+use thiserror::Error;
 
 /// Custom error types for bpwd
+#[derive(Error, Debug)]
 enum BwdError {
-    Io(std::io::Error),
+    #[error("IO Error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Clipboard Error: {0}")]
     Clipboard(String),
+    #[error("Invalid path: '{0}'")]
     InvalidPath(String),
-}
-
-impl fmt::Display for BwdError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BwdError::Io(err) => write!(f, "IO Error: {}", err),
-            BwdError::Clipboard(err) => write!(f, "Clipboard Error: {}", err),
-            BwdError::InvalidPath(path) => write!(f, "Invalid path: '{}'", path),
-        }
-    }
 }
 
 fn main() {
