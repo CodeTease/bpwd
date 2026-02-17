@@ -20,12 +20,12 @@ cargo install bpwd
 
 In Linux:
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/CodeTease/bpwd/latest/releases/bpwd-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/CodeTease/bpwd/releases/latest/download/bpwd-installer.sh | sh
 ```
 
 In Windows (PowerShell)
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/CodeTease/bpwd/latest/releases/bpwd-installer.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/CodeTease/bpwd/releases/latest/download/bpwd-installer.ps1 | iex"
 ```
 
 ### Release
