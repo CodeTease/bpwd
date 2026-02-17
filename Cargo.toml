@@ -8,5 +8,16 @@ homepage = "https://github.com/CodeTease/bpwd"
 license = "MIT"
 readme = "README.md"
 
+[[bin]]
+name = "bwd"
+path = "src/main.rs"
+
 [dependencies]
 cli-clipboard = "0.4.0"
+
+[profile.release]
+strip = true      # Automatically strip symbols from the binary.
+opt-level = "z"   # Optimize for size. "s" is also an option, but "z" is more aggressive.
+lto = true        # Enable Link Time Optimization.
+codegen-units = 1 # Reduce parallel codegen units to increase optimization opportunities.
+panic = "abort"   # Abort on panic instead of unwinding. Removes landing pads and unwind tables.
