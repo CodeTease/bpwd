@@ -37,6 +37,7 @@ fn run() -> Result<(), BwdError> {
     }
 
     let copy_flag = args.iter().any(|arg| arg == "-c");
+    let slash_flag = args.iter().any(|arg| arg == "-s");
     let target = args.iter().find(|arg| !arg.starts_with('-'));
 
     let cwd = env::current_dir().map_err(BwdError::Io)?;
@@ -51,7 +52,12 @@ fn run() -> Result<(), BwdError> {
         cwd
     };
 
-    let path_str = final_path.to_string_lossy().to_string();
+    let mut path_str = final_path.to_string_lossy().to_string();
+
+    // Apply slash normalization if -s flag is present
+    if slash_flag {
+        path_str = path_str.replace('\\', "/");
+    }
 
     // Standard output
     println!("{}", path_str);
@@ -64,7 +70,7 @@ fn run() -> Result<(), BwdError> {
     Ok(())
 }
 
-/// Strip the UNC prefix (\\?\) which is common on Windows when using canonicalize()
+/// Strip the UNC prefix (\\?\$ which is common on Windows when using canonicalize()
 fn clean_windows_path(path: PathBuf) -> PathBuf {
     let path_str = path.to_string_lossy();
     if path_str.starts_with(r"\\?\") {
@@ -77,8 +83,9 @@ fn clean_windows_path(path: PathBuf) -> PathBuf {
 fn print_help() {
     println!("bwd - Better Working Directory");
     println!("\nUsage:");
-    println!("  bwd [target] [-c]");
+    println!("  bwd [target] [-c] [-s]");
     println!("\nFlags:");
     println!("  -c             Copy to clipboard");
+    println!("  -s             Use forward slashes (/) instead of backslashes (\\$");
     println!("  -h, --help     Show this help");
 }
