@@ -2,11 +2,19 @@
 name = "bpwd"
 version = "0.1.0"
 edition = "2024"
-description = "A better pwd with clipboard support and targeting"
+description = "A better pwd"
+authors = ["CodeTease"]
+keywords = ["pwd", "cwd", "codetease", "bwd", "bpwd", "clipboard"]
 repository = "https://github.com/CodeTease/bpwd"
 homepage = "https://github.com/CodeTease/bpwd"
 license = "MIT"
 readme = "README.md"
+
+[package.metadata.wix]
+upgrade-guid = "DE45995A-72EB-4DF7-A4C6-C46C826F7353"
+path-guid = "A6AC1CDA-C356-448B-B0E9-846C521A6AEB"
+license = false
+eula = false
 
 [[bin]]
 name = "bwd"
@@ -22,3 +30,8 @@ opt-level = "z"   # Optimize for size. "s" is also an option, but "z" is more ag
 lto = true        # Enable Link Time Optimization.
 codegen-units = 1 # Reduce parallel codegen units to increase optimization opportunities.
 panic = "abort"   # Abort on panic instead of unwinding. Removes landing pads and unwind tables.
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
