@@ -25,12 +25,16 @@ fn main() {
 fn run() -> Result<(), BwdError> {
     let args: Vec<String> = env::args().skip(1).collect();
 
-    if args.iter().any(|arg| arg == "-h" || arg == "--help") {
+    // Check for help/version flags, but respect the -- separator.
+    let flags_end = args.iter().position(|arg| arg == "--").unwrap_or(args.len());
+    let flags_slice = &args[..flags_end];
+
+    if flags_slice.iter().any(|arg| arg == "-h" || arg == "--help") {
         print_help();
         return Ok(());
     }
 
-    if args.iter().any(|arg| arg == "-v" || arg == "--version") {
+    if flags_slice.iter().any(|arg| arg == "-v" || arg == "--version") {
         println!("{} v{}", "bwd", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
@@ -68,9 +72,31 @@ fn run() -> Result<(), BwdError> {
 }
 
 fn parse_config(args: &[String]) -> (Option<String>, bool, bool) {
-    let copy_flag = args.iter().any(|arg| arg == "-c");
-    let slash_flag = args.iter().any(|arg| arg == "-s");
-    let target = args.iter().find(|arg| !arg.starts_with('-')).cloned();
+    let mut target = None;
+    let mut copy_flag = false;
+    let mut slash_flag = false;
+    let mut parsing_flags = true;
+
+    for arg in args {
+        if parsing_flags && arg == "--" {
+            parsing_flags = false;
+            continue;
+        }
+
+        if parsing_flags && arg.starts_with('-') {
+            match arg.as_str() {
+                "-c" => copy_flag = true,
+                "-s" => slash_flag = true,
+                _ => {} // Ignore unknown flags
+            }
+            continue;
+        }
+
+        // If it's not a flag (or we stopped parsing flags), it's the target
+        if target.is_none() {
+            target = Some(arg.clone());
+        }
+    }
     (target, copy_flag, slash_flag)
 }
 
@@ -164,5 +190,32 @@ mod tests {
         let p = PathBuf::from(r"\\?\C:\Windows");
         let expected = PathBuf::from(r"C:\Windows");
         assert_eq!(clean_windows_path(p), expected);
+    }
+
+    #[test]
+    fn test_parse_config_dash_separator() {
+        let args: Vec<String> = vec!["--".to_string(), "-file".to_string()];
+        let (target, copy, slash) = parse_config(&args);
+        assert_eq!(target, Some("-file".to_string()));
+        assert_eq!(copy, false);
+        assert_eq!(slash, false);
+    }
+
+    #[test]
+    fn test_parse_config_dash_separator_with_flags() {
+        let args: Vec<String> = vec!["-c".to_string(), "--".to_string(), "-file".to_string()];
+        let (target, copy, slash) = parse_config(&args);
+        assert_eq!(target, Some("-file".to_string()));
+        assert_eq!(copy, true);
+        assert_eq!(slash, false);
+    }
+
+    #[test]
+    fn test_parse_config_flags_after_separator_are_target() {
+        let args: Vec<String> = vec!["--".to_string(), "-c".to_string()];
+        let (target, copy, slash) = parse_config(&args);
+        assert_eq!(target, Some("-c".to_string()));
+        assert_eq!(copy, false);
+        assert_eq!(slash, false);
     }
 }
