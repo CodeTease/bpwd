@@ -36,6 +36,11 @@ fn run() -> Result<(), BwdError> {
         return Ok(());
     }
 
+    if args.iter().any(|arg| arg == "-v" || arg == "--version") {
+        println!("{} v{}", "bwd", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     let (target, copy_flag, slash_flag) = parse_config(&args);
 
     let cwd = env::current_dir().map_err(BwdError::Io)?;
