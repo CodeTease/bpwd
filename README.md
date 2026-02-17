@@ -16,6 +16,18 @@ brew install CodeTease/tap/bpwd
 cargo install bpwd
 ```
 
+### Installer Script
+
+In Linux:
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/CodeTease/bpwd/latest/releases/bpwd-installer.sh | sh
+```
+
+In Windows (PowerShell)
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/CodeTease/bpwd/latest/releases/bpwd-installer.ps1 | iex"
+```
+
 ### Release
 
 You can also download the binary from the [Release page](https://github.com/CodeTease/bpwd/releases).
