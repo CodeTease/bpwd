@@ -1,0 +1,12 @@
+[package]
+name = "bpwd"
+version = "0.1.0"
+edition = "2024"
+description = "A better pwd with clipboard support and targeting"
+repository = "https://github.com/CodeTease/bpwd"
+homepage = "https://github.com/CodeTease/bpwd"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+cli-clipboard = "0.4.0"
