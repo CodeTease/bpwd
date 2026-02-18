@@ -23,6 +23,7 @@ path = "src/main.rs"
 [dependencies]
 cli-clipboard = "0.4.0"
 thiserror = "2.0"
+tinyjson = "2.5.1"
 
 [profile.release]
 strip = true      # Automatically strip symbols from the binary.

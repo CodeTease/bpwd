@@ -2,7 +2,9 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
+use std::collections::HashMap;
 use thiserror::Error;
+use tinyjson::JsonValue;
 
 /// Custom error types for bpwd
 #[derive(Error, Debug)]
@@ -15,6 +17,16 @@ enum BwdError {
     InvalidPath(String),
     #[error("Root not found")]
     RootNotFound,
+    #[error("JSON Error: {0}")]
+    Json(String),
+}
+
+struct Config {
+    target: Option<String>,
+    copy: bool,
+    short: bool,
+    json: bool,
+    root: bool,
 }
 
 fn main() {
@@ -41,12 +53,12 @@ fn run() -> Result<(), BwdError> {
         return Ok(());
     }
 
-    let (target, copy_flag, slash_flag, root_flag) = parse_config(&args);
+    let config = parse_config(&args);
 
     let cwd = env::current_dir().map_err(BwdError::Io)?;
 
-    let final_path = if let Some(t) = target {
-        let path = cwd.join(&t);
+    let final_path = if let Some(t) = &config.target {
+        let path = cwd.join(t);
         if !path.exists() {
             return Err(BwdError::InvalidPath(t.to_string()));
         }
@@ -55,39 +67,84 @@ fn run() -> Result<(), BwdError> {
         cwd
     };
 
-    let mut path_str = if root_flag {
-        let root = find_root(&final_path).ok_or(BwdError::RootNotFound)?;
-        let relative = final_path.strip_prefix(&root).unwrap_or(Path::new(""));
-        if relative.as_os_str().is_empty() {
-            ".".to_string()
-        } else {
-            relative.to_string_lossy().to_string()
-        }
-    } else {
-        final_path.to_string_lossy().to_string()
-    };
+    let absolute_str = final_path.to_string_lossy().to_string();
 
-    // Apply slash normalization if -s flag is present
-    if slash_flag {
-        path_str = path_str.replace('\\', "/");
+    // Determine home directory for shortening
+    let home_dir = get_home_dir();
+
+    // JSON Output Priority
+    if config.json {
+        let short_str = shorten_path(&final_path, home_dir.as_deref());
+        
+        let root_val = if let Some(root) = find_root(&final_path) {
+             let relative = final_path.strip_prefix(&root).unwrap_or(Path::new(""));
+             let s = if relative.as_os_str().is_empty() {
+                 ".".to_string()
+             } else {
+                 relative.to_string_lossy().to_string()
+             };
+             JsonValue::String(s)
+        } else {
+            JsonValue::Null
+        };
+        
+        let mut map = HashMap::new();
+        map.insert("path".to_string(), JsonValue::String(absolute_str));
+        map.insert("short".to_string(), JsonValue::String(short_str));
+        map.insert("root".to_string(), root_val);
+        
+        let json_obj = JsonValue::Object(map);
+        let json_str = json_obj.stringify().map_err(|e| BwdError::Json(format!("{:?}", e)))?;
+        println!("{}", json_str);
+        return Ok(());
     }
 
-    // Standard output
-    println!("{}", path_str);
+    // Short Output Priority
+    if config.short {
+        let short_str = shorten_path(&final_path, home_dir.as_deref());
+        println!("{}", short_str);
+        if config.copy {
+            cli_clipboard::set_contents(short_str).map_err(|e| BwdError::Clipboard(e.to_string()))?;
+        }
+        return Ok(());
+    }
 
-    // Clipboard action
-    if copy_flag {
-        cli_clipboard::set_contents(path_str).map_err(|e| BwdError::Clipboard(e.to_string()))?;
+    // Default Output Priority
+    // Note: Previously logic handled -r here. If user passed -r but NOT -j or -s, 
+    // should we still output relative path?
+    // The prompt says "Default: In đường dẫn tuyệt đối".
+    // But if explicit -r is passed, it's not "Default". 
+    // I will preserve -r behavior if explicitly requested, otherwise default to absolute.
+    let output_str = if config.root {
+         if let Some(root) = find_root(&final_path) {
+             let relative = final_path.strip_prefix(&root).unwrap_or(Path::new(""));
+             if relative.as_os_str().is_empty() {
+                 ".".to_string()
+             } else {
+                 relative.to_string_lossy().to_string()
+             }
+        } else {
+            return Err(BwdError::RootNotFound);
+        }
+    } else {
+        absolute_str
+    };
+
+    println!("{}", output_str);
+
+    if config.copy {
+        cli_clipboard::set_contents(output_str).map_err(|e| BwdError::Clipboard(e.to_string()))?;
     }
 
     Ok(())
 }
 
-fn parse_config(args: &[String]) -> (Option<String>, bool, bool, bool) {
+fn parse_config(args: &[String]) -> Config {
     let mut target = None;
-    let mut copy_flag = false;
-    let mut slash_flag = false;
-    let mut root_flag = false;
+    let mut copy = false;
+    let mut short = false;
+    let mut json = false;
+    let mut root = false;
     let mut parsing_flags = true;
 
     for arg in args {
@@ -98,9 +155,10 @@ fn parse_config(args: &[String]) -> (Option<String>, bool, bool, bool) {
 
         if parsing_flags && arg.starts_with('-') {
             match arg.as_str() {
-                "-c" => copy_flag = true,
-                "-s" => slash_flag = true,
-                "-r" => root_flag = true,
+                "-c" | "--copy" => copy = true,
+                "-s" | "--short" => short = true,
+                "-j" | "--json" => json = true,
+                "-r" | "--root" => root = true,
                 _ => {} // Ignore unknown flags
             }
             continue;
@@ -111,7 +169,26 @@ fn parse_config(args: &[String]) -> (Option<String>, bool, bool, bool) {
             target = Some(arg.clone());
         }
     }
-    (target, copy_flag, slash_flag, root_flag)
+    Config { target, copy, short, json, root }
+}
+
+fn get_home_dir() -> Option<PathBuf> {
+    env::var("HOME").ok().map(PathBuf::from)
+        .or_else(|| env::var("USERPROFILE").ok().map(PathBuf::from))
+}
+
+fn shorten_path(path: &Path, home: Option<&Path>) -> String {
+    if let Some(h) = home {
+        if let Ok(stripped) = path.strip_prefix(h) {
+             let replacement = if stripped.as_os_str().is_empty() {
+                 PathBuf::from("$HOME")
+             } else {
+                 PathBuf::from("$HOME").join(stripped)
+             };
+             return replacement.to_string_lossy().to_string();
+        }
+    }
+    path.to_string_lossy().to_string()
 }
 
 fn find_root(path: &Path) -> Option<PathBuf> {
@@ -140,12 +217,14 @@ fn clean_windows_path(path: PathBuf) -> PathBuf {
 fn print_help() {
     println!("bwd - Better Working Directory");
     println!("\nUsage:");
-    println!("  bwd [target] [-c] [-s] [-r]");
+    println!("  bwd [target] [-c] [-s] [-j] [-r]");
     println!("\nFlags:");
-    println!("  -c             Copy to clipboard");
-    println!("  -s             Use forward slashes (/) instead of backslashes (\\$");
-    println!("  -r             Print path relative to project root (.git or .bwd-root)");
+    println!("  -c, --copy     Copy to clipboard");
+    println!("  -s, --short    Shorten path (replace home with $HOME)");
+    println!("  -j, --json     Output JSON (path, short, root)");
+    println!("  -r, --root     Print path relative to project root (.git or .bwd-root)");
     println!("  -h, --help     Show this help");
+    println!("  -v, --version  Show version");
 }
 
 #[cfg(test)]
@@ -154,63 +233,76 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_parse_config_no_args() {
+    fn test_parse_config_defaults() {
         let args: Vec<String> = vec![];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, None);
-        assert_eq!(copy, false);
-        assert_eq!(slash, false);
-        assert_eq!(root, false);
+        let config = parse_config(&args);
+        assert_eq!(config.target, None);
+        assert_eq!(config.copy, false);
+        assert_eq!(config.short, false);
+        assert_eq!(config.json, false);
+        assert_eq!(config.root, false);
     }
 
     #[test]
-    fn test_parse_config_target_only() {
-        let args: Vec<String> = vec!["some/path".to_string()];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, Some("some/path".to_string()));
-        assert_eq!(copy, false);
-        assert_eq!(slash, false);
-        assert_eq!(root, false);
-    }
-
-    #[test]
-    fn test_parse_config_copy_flag() {
-        let args: Vec<String> = vec!["-c".to_string()];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, None);
-        assert_eq!(copy, true);
-        assert_eq!(slash, false);
-        assert_eq!(root, false);
-    }
-
-    #[test]
-    fn test_parse_config_slash_flag() {
+    fn test_parse_config_short_flag() {
         let args: Vec<String> = vec!["-s".to_string()];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, None);
-        assert_eq!(copy, false);
-        assert_eq!(slash, true);
-        assert_eq!(root, false);
+        let config = parse_config(&args);
+        assert!(config.short);
+        assert!(!config.json);
     }
 
     #[test]
-    fn test_parse_config_all() {
-        let args: Vec<String> = vec!["-c".to_string(), "target".to_string(), "-s".to_string()];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, Some("target".to_string()));
-        assert_eq!(copy, true);
-        assert_eq!(slash, true);
-        assert_eq!(root, false);
+    fn test_parse_config_json_flag() {
+        let args: Vec<String> = vec!["--json".to_string()];
+        let config = parse_config(&args);
+        assert!(config.json);
+        assert!(!config.short);
     }
-    
+
     #[test]
-    fn test_parse_config_ignore_unknown_flags_as_target() {
-        let args: Vec<String> = vec!["-x".to_string()];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, None);
-        assert_eq!(copy, false);
-        assert_eq!(slash, false);
-        assert_eq!(root, false);
+    fn test_parse_config_all_flags() {
+        let args: Vec<String> = vec!["-c".to_string(), "-s".to_string(), "-j".to_string()];
+        let config = parse_config(&args);
+        assert!(config.copy);
+        assert!(config.short);
+        assert!(config.json);
+    }
+
+    #[test]
+    fn test_shorten_path_match() {
+        // Construct paths in a platform-agnostic way for testing logic
+        let home = PathBuf::from("/home/user");
+        let path = home.join("docs/project");
+        let short = shorten_path(&path, Some(&home));
+        
+        // Expected: $HOME/docs/project
+        // Note: join uses OS separator. On unix it's /, on windows \
+        // The shorten_path implementation uses PathBuf::from("$HOME").join(...)
+        // So it should match OS separator.
+        let expected = PathBuf::from("$HOME").join("docs/project").to_string_lossy().to_string();
+        assert_eq!(short, expected);
+    }
+
+    #[test]
+    fn test_shorten_path_exact_match() {
+        let home = PathBuf::from("/home/user");
+        let short = shorten_path(&home, Some(&home));
+        assert_eq!(short, "$HOME");
+    }
+
+    #[test]
+    fn test_shorten_path_no_match() {
+        let home = PathBuf::from("/home/user");
+        let path = PathBuf::from("/var/log");
+        let short = shorten_path(&path, Some(&home));
+        assert_eq!(short, path.to_string_lossy().to_string());
+    }
+
+    #[test]
+    fn test_shorten_path_no_home() {
+        let path = PathBuf::from("/home/user/docs");
+        let short = shorten_path(&path, None);
+        assert_eq!(short, path.to_string_lossy().to_string());
     }
 
     #[test]
@@ -227,53 +319,55 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_config_target_only() {
+        let args: Vec<String> = vec!["some/path".to_string()];
+        let config = parse_config(&args);
+        assert_eq!(config.target, Some("some/path".to_string()));
+    }
+
+    #[test]
+    fn test_parse_config_ignore_unknown_flags_as_target() {
+        // Unknown flags are ignored, so target remains None unless it's positional
+        // In the loop: if not parsing flags, or not starting with -, it's target.
+        // If it starts with - and is unknown, it's ignored.
+        let args: Vec<String> = vec!["-x".to_string()];
+        let config = parse_config(&args);
+        assert_eq!(config.target, None);
+        // But if we have -x followed by path?
+        let args2: Vec<String> = vec!["-x".to_string(), "path".to_string()];
+        let config2 = parse_config(&args2);
+        assert_eq!(config2.target, Some("path".to_string()));
+    }
+
+    #[test]
     fn test_parse_config_dash_separator() {
         let args: Vec<String> = vec!["--".to_string(), "-file".to_string()];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, Some("-file".to_string()));
-        assert_eq!(copy, false);
-        assert_eq!(slash, false);
-        assert_eq!(root, false);
+        let config = parse_config(&args);
+        assert_eq!(config.target, Some("-file".to_string()));
+        assert!(!config.copy);
     }
 
     #[test]
     fn test_parse_config_dash_separator_with_flags() {
         let args: Vec<String> = vec!["-c".to_string(), "--".to_string(), "-file".to_string()];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, Some("-file".to_string()));
-        assert_eq!(copy, true);
-        assert_eq!(slash, false);
-        assert_eq!(root, false);
+        let config = parse_config(&args);
+        assert_eq!(config.target, Some("-file".to_string()));
+        assert!(config.copy);
     }
 
     #[test]
     fn test_parse_config_flags_after_separator_are_target() {
         let args: Vec<String> = vec!["--".to_string(), "-c".to_string()];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, Some("-c".to_string()));
-        assert_eq!(copy, false);
-        assert_eq!(slash, false);
-        assert_eq!(root, false);
+        let config = parse_config(&args);
+        assert_eq!(config.target, Some("-c".to_string()));
+        assert!(!config.copy);
     }
 
     #[test]
     fn test_parse_config_root_flag() {
         let args: Vec<String> = vec!["-r".to_string()];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, None);
-        assert_eq!(copy, false);
-        assert_eq!(slash, false);
-        assert_eq!(root, true);
-    }
-
-    #[test]
-    fn test_parse_config_root_mixed() {
-        let args: Vec<String> = vec!["-s".to_string(), "-r".to_string(), "foo".to_string()];
-        let (target, copy, slash, root) = parse_config(&args);
-        assert_eq!(target, Some("foo".to_string()));
-        assert_eq!(copy, false);
-        assert_eq!(slash, true);
-        assert_eq!(root, true);
+        let config = parse_config(&args);
+        assert!(config.root);
     }
 
     #[test]
