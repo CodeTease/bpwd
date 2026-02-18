@@ -1,6 +1,6 @@
 [package]
 name = "bpwd"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 description = "A better pwd"
 authors = ["CodeTease"]
@@ -9,12 +9,6 @@ repository = "https://github.com/CodeTease/bpwd"
 homepage = "https://github.com/CodeTease/bpwd"
 license = "MIT"
 readme = "README.md"
-
-[package.metadata.wix]
-upgrade-guid = "DE45995A-72EB-4DF7-A4C6-C46C826F7353"
-path-guid = "A6AC1CDA-C356-448B-B0E9-846C521A6AEB"
-license = false
-eula = false
 
 [[bin]]
 name = "bwd"
