@@ -7,7 +7,14 @@ A better pwd with clipboard support and targeting.
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install CodeTease/tap/bpwd
+brew install CodeTease/tap/bwd
+```
+
+### Scoop (Windows)
+
+```bash
+scoop bucket add codetease https://github.com/CodeTease/scoop-bucket
+scoop install bwd
 ```
 
 ### Cargo
@@ -16,21 +23,11 @@ brew install CodeTease/tap/bpwd
 cargo install bpwd
 ```
 
-### Installer Script
-
-In Linux:
-```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/CodeTease/bpwd/releases/latest/download/bpwd-installer.sh | sh
-```
-
-In Windows (PowerShell)
-```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/CodeTease/bpwd/releases/latest/download/bpwd-installer.ps1 | iex"
-```
-
 ### Release
 
 You can also download the binary from the [Release page](https://github.com/CodeTease/bpwd/releases).
+
+For more download methods, see [INSTALLATION.md](INSTALLATION.md).
 
 ## Usage
 

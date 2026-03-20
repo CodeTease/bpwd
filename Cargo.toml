@@ -1,6 +1,6 @@
 [package]
 name = "bpwd"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 description = "A better pwd"
 authors = ["CodeTease"]
@@ -25,8 +25,3 @@ opt-level = "z"   # Optimize for size. "s" is also an option, but "z" is more ag
 lto = true        # Enable Link Time Optimization.
 codegen-units = 1 # Reduce parallel codegen units to increase optimization opportunities.
 panic = "abort"   # Abort on panic instead of unwinding. Removes landing pads and unwind tables.
-
-# The profile that 'dist' will build with
-[profile.dist]
-inherits = "release"
-lto = "thin"
