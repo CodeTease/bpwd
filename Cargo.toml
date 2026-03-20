@@ -19,6 +19,12 @@ cli-clipboard = "0.4.0"
 thiserror = "2.0"
 tinyjson = "2.5.1"
 
+[target.loongarch64-unknown-linux-gnu]
+nix = "0.31.1"
+
+[target.loongarch64-unknown-linux-musl]
+nix = "0.31.1"
+
 [profile.release]
 strip = true      # Automatically strip symbols from the binary.
 opt-level = "z"   # Optimize for size. "s" is also an option, but "z" is more aggressive.
