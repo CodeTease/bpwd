@@ -110,11 +110,6 @@ fn run() -> Result<(), BwdError> {
     }
 
     // Default Output Priority
-    // Note: Previously logic handled -r here. If user passed -r but NOT -j or -s, 
-    // should we still output relative path?
-    // The prompt says "Default: In đường dẫn tuyệt đối".
-    // But if explicit -r is passed, it's not "Default". 
-    // I will preserve -r behavior if explicitly requested, otherwise default to absolute.
     let output_str = if config.root {
          if let Some(root) = find_root(&final_path) {
              let relative = final_path.strip_prefix(&root).unwrap_or(Path::new(""));
@@ -327,13 +322,9 @@ mod tests {
 
     #[test]
     fn test_parse_config_ignore_unknown_flags_as_target() {
-        // Unknown flags are ignored, so target remains None unless it's positional
-        // In the loop: if not parsing flags, or not starting with -, it's target.
-        // If it starts with - and is unknown, it's ignored.
         let args: Vec<String> = vec!["-x".to_string()];
         let config = parse_config(&args);
         assert_eq!(config.target, None);
-        // But if we have -x followed by path?
         let args2: Vec<String> = vec!["-x".to_string(), "path".to_string()];
         let config2 = parse_config(&args2);
         assert_eq!(config2.target, Some("path".to_string()));
